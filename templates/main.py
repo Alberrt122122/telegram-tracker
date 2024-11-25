@@ -27,6 +27,8 @@ def save_visits(visits):
 
 def get_ip():
     try:
+        if request.headers.get('X-Forwarded-For'):
+            return request.headers.get('X-Forwarded-For').split(',')[0]
         response = requests.get('https://api.ipify.org?format=json')
         return response.json()['ip']
     except:
@@ -90,4 +92,5 @@ def visits():
     return render_template('visits.html', visits=all_visits)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
