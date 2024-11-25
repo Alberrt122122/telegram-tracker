@@ -1,9 +1,13 @@
 services:
   - type: web
     name: telegram-tracker
-    env: python
+    runtime: python
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn main:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.6
+      - key: FLASK_ENV
+        value: production
+    autoDeploy: true
