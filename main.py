@@ -1,29 +1,22 @@
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 import requests
-import json
+import sqlite3
 import os
 
 app = Flask(__name__)
 
-# Путь к файлу с данными о посещениях
-VISITS_FILE = 'visits.json'
-
-def load_visits():
-    try:
-        if os.path.exists(VISITS_FILE):
-            with open(VISITS_FILE, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"Error loading visits: {e}")
-    return []
-
-def save_visits(visits):
-    try:
-        with open(VISITS_FILE, 'w') as f:
-            json.dump(visits, f, indent=2)
-    except Exception as e:
-        print(f"Error saving visits: {e}")
+# Инициализация базы данных
+def init_db():
+    conn = sqlite3.connect('visits.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS visits
+        (timestamp TEXT, ip TEXT, country TEXT, region TEXT, 
+         city TEXT, isp TEXT, referrer TEXT, user_agent TEXT)
+    ''')
+    conn.commit()
+    conn.close()
 
 def get_ip():
     try:
@@ -74,22 +67,54 @@ def track_visit():
         'user_agent': request.user_agent.string
     }
     
-    # Загружаем существующие визиты
-    visits = load_visits()
-    # Добавляем новый визит
-    visits.append(visit_data)
-    # Сохраняем обновленный список
-    save_visits(visits)
+    # Сохраняем в базу данных
+    conn = sqlite3.connect('visits.db')
+    c = conn.cursor()
+    c.execute('''
+        INSERT INTO visits (timestamp, ip, country, region, city, isp, referrer, user_agent)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        visit_data['timestamp'],
+        visit_data['ip'],
+        visit_data['country'],
+        visit_data['region'],
+        visit_data['city'],
+        visit_data['isp'],
+        visit_data['referrer'],
+        visit_data['user_agent']
+    ))
+    conn.commit()
+    conn.close()
     
     return jsonify({'status': 'success'})
 
 @app.route('/visits')
 def visits():
-    # Получаем все визиты из файла
-    all_visits = load_visits()
-    # Сортируем по времени в обратном порядке
-    all_visits.sort(key=lambda x: x['timestamp'], reverse=True)
-    return render_template('visits.html', visits=all_visits)
+    # Получаем все визиты из базы данных
+    conn = sqlite3.connect('visits.db')
+    c = conn.cursor()
+    c.execute('SELECT * FROM visits ORDER BY timestamp DESC')
+    visits_data = c.fetchall()
+    conn.close()
+    
+    # Преобразуем в список словарей
+    visits = []
+    for visit in visits_data:
+        visits.append({
+            'timestamp': visit[0],
+            'ip': visit[1],
+            'country': visit[2],
+            'region': visit[3],
+            'city': visit[4],
+            'isp': visit[5],
+            'referrer': visit[6],
+            'user_agent': visit[7]
+        })
+    
+    return render_template('visits.html', visits=visits)
+
+# Инициализируем базу данных при запуске
+init_db()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
